@@ -3,7 +3,6 @@
 </p>
 
 # WebPTY – Neural Console
-# WebPTY – Neural Console
 
 WebPTY é uma interface de terminal web em **tempo real**, construída com **Flask** no backend e **HTML/CSS/JavaScript puro** no frontend, focada em **diagnóstico de sistema**, **execução local de comandos** e **visualização estilo console real**, com compatibilidade total entre **Linux** e **Android (Termux)**.
 
