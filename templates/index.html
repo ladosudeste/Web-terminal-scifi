@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>WebPTY :: Neural Console</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+@import url("https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap");
+
+:root {
+  --neon: #00ffe1;
+  --bg: #020a0f;
+  --panel: rgba(0, 30, 40, 0.65);
+  --border: rgba(0,255,225,.25);
+}
+
+* {
+  box-sizing: border-box;
+  font-family: "Share Tech Mono", monospace;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top, #05212b, #010609),
+    repeating-linear-gradient(
+      0deg,
+      rgba(255,255,255,0.03),
+      rgba(255,255,255,0.03) 1px,
+      transparent 2px,
+      transparent 4px
+    );
+  color: var(--neon);
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ===== LAYOUT ===== */
+.hud {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 12px;
+  padding: 12px;
+  height: 100%;
+}
+
+/* MOBILE */
+@media (max-width: 900px) {
+  .hud {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    overflow-y: auto;
+  }
+}
+
+/* ===== PANELS ===== */
+.panel {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 10px;
+  box-shadow: inset 0 0 25px rgba(0,255,225,.15),
+              0 0 20px rgba(0,255,225,.1);
+  overflow: hidden;
+}
+
+.panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    120deg,
+    transparent,
+    rgba(0,255,225,.05),
+    transparent
+  );
+  pointer-events: none;
+}
+
+.panel-title {
+  font-size: 11px;
+  letter-spacing: 2px;
+  opacity: .75;
+  margin-bottom: 6px;
+}
+
+/* ===== TERMINAL ===== */
+#terminal {
+  height: calc(100% - 50px);
+  overflow-y: auto;
+  font-size: 13px;
+}
+
+.line {
+  white-space: pre-wrap;
+}
+
+.prompt {
+  color: #7fffd4;
+}
+
+#cmd {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--border);
+  outline: none;
+  color: var(--neon);
+  padding: 8px;
+  font-size: 14px;
+}
+
+/* ===== STATUS ===== */
+.status {
+  position: absolute;
+  bottom: 6px;
+  right: 10px;
+  font-size: 10px;
+  opacity: .6;
+}
+
+/* ===== INFO TEXT ===== */
+pre {
+  font-size: 12px;
+  opacity: .85;
+}
+
+/* ===== WAVE ===== */
+canvas {
+  width: 100%;
+  height: 100%;
+}
+
+/* ===== BLINK CURSOR EFFECT ===== */
+.cursor::after {
+  content: "▌";
+  animation: blink 1s steps(1) infinite;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  overflow: hidden;
+}
+
+#rotate-warning {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  color: #00ffe1;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  z-index: 9999;
+}
+
+@media (orientation: portrait) {
+  #rotate-warning {
+    display: flex;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="hud">
+
+  <!-- TERMINAL -->
+  <div class="panel">
+    <div class="panel-title">SHELL :: LOCALHOST</div>
+    <div id="terminal"></div>
+<div style="display:flex;align-items:center">
+  <span id="prompt"></span>
+  <input id="cmd" autocomplete="off" style="flex:1">
+</div>
+    <div class="status">DEBUG MODE</div>
+  </div>
+  <!-- SYSTEM -->
+  <div class="panel">
+    <div class="panel-title">SYSTEM STATUS</div>
+    <pre id="sys-status">LOADING SYSTEM DATA...</pre>
+  </div>
+
+  <!-- README -->
+  <div class="panel">
+    <div class="panel-title">README.TXT</div>
+    <pre>
+Criado pelo t.me/teIegrador 
+insta: ladosudeste
+
+Framework: Flask
+    </pre>
+  </div>
+
+  <!-- WAVEFORM -->
+  <div class="panel">
+    <div class="panel-title">NEURAL SIGNAL</div>
+    <canvas id="wave"></canvas>
+  </div>
+
+</div>
+
+<script>
+/* ===== TERMINAL ===== */
+const term = document.getElementById("terminal");
+const input = document.getElementById("cmd");
+const promptEl = document.getElementById("prompt");
+
+function print(text) {
+  if (!text) return;
+
+  text.split("\n").forEach(line => {
+    const div = document.createElement("div");
+    div.textContent = line;
+    term.appendChild(div);
+  });
+
+  term.scrollTop = term.scrollHeight;
+}
+
+promptEl.textContent = "$ ";
+
+input.addEventListener("keydown", e => {
+  if (e.key !== "Enter") return;
+
+  const cmd = input.value.trim();
+  if (!cmd) return;
+
+  // mostra comando com prompt real
+  print(promptEl.textContent + cmd);
+  input.value = "";
+
+  // ===== LIMPAR TELA (FRONTEND) =====
+  if (cmd === "clear" || cmd === "cls") {
+    term.innerHTML = "";
+    return;
+  }
+
+  // ===== EXECUÇÃO NORMAL =====
+  fetch("/exec", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({cmd})
+  })
+  .then(r => r.text())
+  .then(out => {
+    // remove ANSI
+    out = out.replace(/\x1B\[[0-9;]*[A-Za-z]/g, "");
+    if (out.trim()) print(out);
+    updatePrompt();
+  });
+});
+
+/* ===== WAVEFORM ===== */
+const canvas = document.getElementById("wave");
+const ctx = canvas.getContext("2d");
+
+function resize() {
+  canvas.width = canvas.offsetWidth;
+  canvas.height = canvas.offsetHeight;
+}
+window.addEventListener("resize", resize);
+resize();
+
+let t = 0;
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle = "#00ffe1";
+  ctx.lineWidth = 1;
+
+  ctx.beginPath();
+  for (let x = 0; x < canvas.width; x++) {
+    const y =
+      canvas.height / 2 +
+      Math.sin(x * 0.02 + t) * 18 *
+      Math.sin(t * 0.7);
+    ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  t += 0.04;
+  requestAnimationFrame(draw);
+}
+draw();
+const sysBox = document.getElementById("sys-status");
+
+function updateSystemStatus() {
+  fetch("/sysinfo")
+    .then(r => r.text())
+    .then(t => sysBox.textContent = t);
+}
+
+setInterval(updateSystemStatus, 1000);
+updateSystemStatus();
+</script>
+
+</body>
+<script src="/static/app.js"></script>
+</html>
