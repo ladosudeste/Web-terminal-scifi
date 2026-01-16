@@ -1,3 +1,4 @@
+![WebPTY Neural Console](images/image.png)
 
 # WebPTY – Neural Console
 
